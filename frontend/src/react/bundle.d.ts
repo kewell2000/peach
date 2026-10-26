@@ -119,6 +119,23 @@ export interface DownloadConfig {
 
 export type PikPakBrowserState = 'idle' | 'waiting' | 'done' | 'cancelled' | 'timeout' | 'failed';
 
+/** 设置页的 qBittorrent。密码只报存没存过。 */
+export interface QbitSettings {
+  enabled: boolean;
+  url: string;
+  username: string;
+  password_set: boolean;
+  category: string;
+  save_path: string;
+}
+
+export interface QbitCheck {
+  ok: boolean;
+  version: string;
+  webapi_version: string;
+  message: string;
+}
+
 /** 设置页的云下载块。凭据只报存没存过，不回值。 */
 export interface DownloadSettingsState {
   available: boolean;
@@ -131,6 +148,7 @@ export interface DownloadSettingsState {
   pikpak_roots: string[];
   providers: { key: DownloadProviderKey; label: string }[];
   max_wait_hours: number;
+  qbittorrent: QbitSettings;
 }
 
 /** 「保存配置」的响应：设置块加一份按已保存配置做的检查报告，没有令牌时为 null。 */
@@ -202,6 +220,8 @@ export interface DownloadsSnapshot {
   available: boolean;
   providers: { key: DownloadProviderKey; label: string; configured: boolean; target: string }[];
   tasks: DownloadTask[];
+  /** 已保存并启用 qBittorrent 时，资源搜索可以发送磁力。 */
+  qbittorrent?: { ready: boolean };
 }
 
 export interface DownloadSubmitResult {

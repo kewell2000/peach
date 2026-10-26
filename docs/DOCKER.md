@@ -10,7 +10,7 @@ Docker 不使用桌面托盘。在网页配置中添加媒体目录时，只需�
 
 CloudDrive2 与 Peach 分别运行。NAS 已有 CloudDrive2 时直接复用；全新机器按 [CloudDrive2 官方 Docker 指南](https://www.clouddrive2.com/docker.html) 安装并绑定网盘。让 Peach 容器也能读取 CloudDrive2 后续挂上的网盘目录，需要 Linux 宿主机支持 FUSE，并将 CloudDrive2 的挂载目录配置为可共享挂载变化；Compose 中的 `rslave` 用于让这些变化进入 Peach 容器。此机制不适用于 Docker Desktop，详见 [Docker 挂载传播说明](https://docs.docker.com/engine/storage/bind-mounts/#configure-bind-propagation)。Peach 容器不需要 FUSE 或特权模式。目录权限必须允许容器用户 UID 1000 读取。
 
-需要云下载或推送发现时，Peach 配置中的 CloudDrive2 API 地址使用同一容器网络的服务名或可达的宿主机地址；容器里的 `127.0.0.1` 只指向 Peach 自己。
+需要云下载或推送发现时，Peach 配置中的 CloudDrive2 API 地址使用同一容器网络的服务名或可达的宿主机地址；容器里的 `127.0.0.1` 只指向 Peach 自己。qBittorrent WebUI 同样填写容器能访问的地址。保存路径在 qBittorrent 那台机器上，下载完成的文件不会自动进入 Peach 馆藏。
 
 仓库根的 `compose.yaml` 使用 `PEACH_MEDIA_ROOT` 指定宿主机已有媒体根；容器中固定为 `/media`。先完成 CloudDrive2 挂载，再启动 Peach。命名卷 `peach-data` 保存 `/data`，不要执行删除该卷的操作。需要绑定现有数据目录时，先做完整备份并确保 UID 1000 可写；不要让另一台 Peach 同时写这份 Peach 数据库。
 

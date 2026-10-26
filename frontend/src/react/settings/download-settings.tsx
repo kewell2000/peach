@@ -1,12 +1,13 @@
 /* 「云下载」：把磁力交给 115 或 PikPak 离线下载，文件落在已挂载的网盘目录，由推送发现入库。
  *
- * 两张卡。第一张是地址、令牌、目标目录与等待上限：115 走 CloudDrive2 的 gRPC，令牌在
+ * 三张卡。第一张是地址、令牌、目标目录与等待上限：115 走 CloudDrive2 的 gRPC，令牌在
  * CloudDrive2「设置 → API 令牌」里生成。检查去问 CloudDrive2 有没有离线权限、目标目录能不能
  * 离线、115 还剩几条配额，只读，不提交：地址和令牌都已保存时卡片一打开就按已保存的配置查一遍，
  * 「保存配置」的响应里也带着一份，「检查」键按此刻填的值重查。115 目标目录留空保存时，服务端按
  * 推送发现推一个目录，已经存在就直接存上。地址、还没存的目标目录与 PikPak 根留空时，检查把
  * 探测到的、按推送发现推出的值填回表单，点「保存配置」才落盘；推出的目录不存在时给一颗
  * 「新建这个目录」，只有点了才在 CloudDrive2 里建。第二张是 PikPak 账号，提供账号密码与浏览器登录。
+ * 第三张是 qBittorrent：把资源搜索里的磁力交给 WebUI，文件留在 qBittorrent 的保存路径。
  *
  * 令牌与密码只往本机凭据文件写，读接口只回「存没存过」，所以令牌框保存后清空、提示改成
  * 「已保存，留空不改」。PikPak 要人机验证时服务端回一个验证页地址，这里给出链接让用户在浏览器
@@ -22,6 +23,7 @@ import { Select, SelectItem } from '@/components/base/select/select';
 import { apiGet, apiSend, errorMessage } from '../../api';
 import type {
   ConfigurationPanel, DownloadCheckReport, DownloadConfig, DownloadSaveResult, DownloadSettingsState, PikPakLoginResult,
+  QbitCheck, QbitSettings,
 } from '../bundle';
 import { LoadingDots } from '../components/loading-dots';
 import { Note } from '../components/note';
@@ -39,7 +41,12 @@ const FOLDER_URL = '/api/configuration/downloads/folder';
 const LOGIN_URL = '/api/configuration/downloads/pikpak/login';
 const LOGOUT_URL = '/api/configuration/downloads/pikpak/logout';
 const BROWSER_URL = '/api/configuration/downloads/pikpak/browser-login';
+const QBIT_URL = '/api/configuration/downloads/qbittorrent';
 const POLL_MS = 2000;
+
+const EMPTY_QBIT: QbitSettings = {
+  enabled: false, url: '', username: '', password_set: false, category: '', save_path: '',
+};
 
 /** 「下载渠道」分组：CloudDrive2 与 PikPak 账号。 */
 export function DownloadGroup({ initial, receipt, panel }: {
@@ -66,6 +73,7 @@ export function DownloadSettings({ initial, receipt }: {
     <>
       <DownloadForm state={state} settle={setState} receipt={receipt} pikpakAccount={pikpakAccount} />
       <PikPakAccount state={state} settle={setState} receipt={receipt} username={username} setUsername={setUsername} />
+      <QbitCard initial={state.qbittorrent ?? EMPTY_QBIT} receipt={receipt} />
       <JavBrowserSettings receipt={receipt} refreshKey={JSON.stringify([
         state.config, state.token_set, state.pikpak.logged_in,
       ])} />
@@ -239,6 +247,62 @@ interface Blanks {
   address: boolean;
   target: boolean;
   root: boolean;
+}
+
+function QbitCard({ initial, receipt }: { initial: QbitSettings; receipt(message: string): void }) {
+  const [form, setForm] = useState(initial);
+  const [password, setPassword] = useState('');
+  const [clearPassword, setClearPassword] = useState(false);
+  const [report, setReport] = useState<QbitCheck | null>(null);
+  const action = useAction();
+  const patch = (fields: Partial<QbitSettings>) => setForm((current) => ({ ...current, ...fields }));
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const body = { ...form, password, clear_password: clearPassword };
+    void action.run('save', (signal) => apiSend<QbitSettings>(QBIT_URL, body, 'POST', signal), (next) => {
+      setForm(next);
+      setPassword('');
+      setClearPassword(false);
+      setReport(null);
+      receipt('已保存 qBittorrent');
+    });
+  };
+  const check = () => {
+    const body = { url: form.url, username: form.username, password };
+    void action.run('check', (signal) => apiSend<QbitCheck>(`${QBIT_URL}/check`, body, 'POST', signal), setReport);
+  };
+  return (
+    <Section title="qBittorrent" onSubmit={submit}>
+      <Stack>
+        <Help>把资源搜索里的磁力交给 qBittorrent WebUI。文件留在它的保存路径。</Help>
+        <Input label="qBittorrent 地址" placeholder="http://192.0.2.17:8085" autoComplete="off" maxLength={2048}
+          hint="协议、主机、端口和可选路径。用户名和密码单独填写。"
+          value={form.url} onChange={(url) => patch({ url })} />
+        <Input label="qBittorrent 用户名" autoComplete="off" maxLength={200}
+          value={form.username} onChange={(username) => patch({ username })} />
+        <Input label="qBittorrent 密码" type="password" autoComplete="new-password" maxLength={200}
+          placeholder={form.password_set ? '已保存，留空不改' : 'WebUI 登录密码'}
+          value={password} onChange={setPassword} />
+        <Input label="分类" placeholder="可留空" autoComplete="off" maxLength={80}
+          hint="留空时使用 qBittorrent 的默认分类。"
+          value={form.category} onChange={(category) => patch({ category })} />
+        <Input label="保存路径" placeholder="可留空" autoComplete="off" maxLength={500}
+          hint="qBittorrent 所在机器上的目录。留空时用它自己的默认路径。"
+          value={form.save_path} onChange={(save_path) => patch({ save_path })} />
+        <Checkbox isSelected={form.enabled} isDisabled={Boolean(action.busy)}
+          onChange={(enabled) => patch({ enabled })}>启用 qBittorrent</Checkbox>
+        {form.password_set ? <Checkbox isSelected={clearPassword} isDisabled={Boolean(action.busy)}
+          onChange={setClearPassword}>清除已保存的密码</Checkbox> : null}
+        {report?.ok ? <Help role="status">{`已连上 ${report.version}（WebAPI ${report.webapi_version}）`}</Help> : null}
+        {report && !report.ok ? <ErrorText>{report.message}</ErrorText> : null}
+        {action.error ? <ErrorText>{action.error}</ErrorText> : null}
+      </Stack>
+      <Footer>
+        <Button variant="secondary" onClick={check} {...busyProps(action.busy === 'check')}>检查连接</Button>
+        <Button type="submit" {...busyProps(action.busy === 'save')}>保存配置</Button>
+      </Footer>
+    </Section>
+  );
 }
 
 function CheckReport({ report, detected, suggested, create, creating }: {

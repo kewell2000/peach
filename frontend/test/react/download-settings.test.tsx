@@ -17,6 +17,7 @@ const state = (patch: Partial<DownloadSettingsState> = {}): DownloadSettingsStat
   pikpak_roots: ['P:\\'],
   providers: [{ key: '115', label: '115' }, { key: 'pikpak', label: 'PikPak' }],
   max_wait_hours: 1440,
+  qbittorrent: { enabled: false, url: '', username: '', password_set: false, category: '', save_path: '' },
   ...patch,
 });
 
@@ -403,4 +404,36 @@ it('只读端整块不可操作，并说明原因', async () => {
   const host = await mount(<DownloadSettings initial={state({ available: false })} receipt={vi.fn()} />);
   expect(buttonNamed('保存配置', host)?.disabled).toBe(true);
   expect(host.textContent).toContain('云下载只在允许修改数据库的设备上可用');
+});
+
+it('qBittorrent 保存后清空密码，读回的设置不含密码', async () => {
+  const saved = { enabled: true, url: 'http://192.0.2.17:8085', username: 'admin',
+    password_set: true, category: 'peach', save_path: '/downloads/peach' };
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => ({
+    ok: true, status: 200, json: async () => (init?.method === 'POST' ? saved : state()),
+  }));
+  vi.stubGlobal('fetch', fetcher);
+  const receipt = vi.fn();
+  const host = await mount(<DownloadSettings initial={state()} receipt={receipt} />);
+  const secret = field(host, 'qBittorrent 密码');
+  expect(secret?.type).toBe('password');
+  expect(field(host, 'qBittorrent 地址')?.placeholder).toBe('http://192.0.2.17:8085');
+  await type(field(host, 'qBittorrent 地址'), 'http://192.0.2.17:8085');
+  await type(field(host, 'qBittorrent 用户名'), 'admin');
+  await type(secret, 'qb-secret-password');
+  await type(field(host, '分类'), 'peach');
+  await type(field(host, '保存路径'), '/downloads/peach');
+  await click([...host.querySelectorAll('label')].find((node) => node.textContent?.trim() === '启用 qBittorrent'));
+  await submit(section(host, 'qBittorrent'));
+  await settle();
+  expect(fetcher.mock.calls.some((call) => call[0] === '/api/configuration/downloads/qbittorrent')).toBe(true);
+  const posted = fetcher.mock.calls.find((call) => call[0] === '/api/configuration/downloads/qbittorrent');
+  expect(JSON.parse(String(posted?.[1]?.body))).toMatchObject({
+    enabled: true, url: 'http://192.0.2.17:8085', username: 'admin', password: 'qb-secret-password',
+    category: 'peach', save_path: '/downloads/peach',
+  });
+  expect(JSON.stringify(saved)).not.toContain('qb-secret-password');
+  expect(receipt).toHaveBeenCalledWith('已保存 qBittorrent');
+  expect(field(host, 'qBittorrent 密码')?.value).toBe('');
+  expect(field(host, 'qBittorrent 密码')?.placeholder).toBe('已保存，留空不改');
 });

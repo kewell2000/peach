@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { CloudDownloadDialog, type DownloadPrefill } from '../../src/react/activity/cloud-download-dialog';
 import type { DownloadsSnapshot, DownloadSubmitResult, DownloadTask } from '../../src/react/bundle';
 import { queryClient } from '../../src/react/query';
-import { buttonNamed, choose, mount, section, settle, submit, type } from './render';
+import { buttonNamed, choose, click, mount, section, settle, submit, type } from './render';
 
 afterEach(() => queryClient.clear());
 
@@ -162,6 +162,31 @@ it.each(['abf-258', 'ABF258', 'ABF-258'])('查询同番号 %s 保留已知作品
   await type(field(page, '磁力链接'), MAGNET);
   await submit(section(page, '提交下载'));
   expect(posts).toEqual([{ magnet: MAGNET, provider: '115', target: '/115/云下载', code: requested, title: '同一作品', origin: 'wishlist:12' }]);
+});
+
+it('已启用 qBittorrent 时，候选磁力发给 WebUI 并留下结果', async () => {
+  const magnet = 'magnet:?xt=urn:btih:' + 'c'.repeat(40);
+  const posts: { url: string; body: unknown }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === 'POST') {
+      posts.push({ url, body: JSON.parse(String(init.body)) });
+      return { ok: true, status: 200, json: async () => ({ ok: true, info_hash: 'c'.repeat(40), pending: false }) };
+    }
+    const body = url.startsWith('/api/resources/search')
+      ? { state: 'ready', warnings: [], error: '', items: [{ id: 'c', uri: magnet, name: 'ABC-123', size: 1024 ** 3,
+        seeders: 2, origins: ['测试源'], resolution: 1080, codec: 'AVC', chinese: false, uncensored: false }] }
+      : url.startsWith('/api/items') ? { items: [] }
+      : snapshot({ qbittorrent: { ready: true } });
+    return { ok: true, status: 200, json: async () => body };
+  }));
+  const { page } = await open({ code: 'ABC-123' });
+  await act(async () => field(page, '按番号查找资源')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await settle();
+  await click(buttonNamed('发送到 qBittorrent', page));
+  await settle();
+  expect(posts).toEqual([{ url: '/api/configuration/downloads/qbittorrent/add', body: { magnet } }]);
+  expect(page.textContent).toContain('已发送到 qBittorrent');
 });
 
 it('只读端可查找资源，提交下载禁用', async () => {

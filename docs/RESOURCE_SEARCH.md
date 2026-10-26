@@ -34,7 +34,31 @@ Peach 通过 Prowlarr 或 Jackett 提供的 Torznab 接口查询资源。先在�
 2. 检查候选的番号、体积、做种与质量信息。
 3. 选中所需候选后提交下载。
 
-有候选表示搜索链路可用；提交下载还需要独立配置 115 或 PikPak。CloudDrive2 的设置见 [完整配置与调优说明](CLOUDDRIVE.md)。
+有候选表示搜索链路可用；提交到 115 或 PikPak 还需要独立配置云下载。CloudDrive2 的设置见 [完整配置与调优说明](CLOUDDRIVE.md)。
+
+## 交给 qBittorrent
+
+资源搜索的候选也可以发给已配置的 qBittorrent WebUI。这一路不经过 115 或 PikPak，也不写入馆藏账本。
+
+打开 **配置 → 下载渠道 → qBittorrent**：
+
+| 字段 | 填写内容 |
+| --- | --- |
+| 地址 | WebUI 根地址，例如 `http://192.0.2.17:8085` |
+| 用户名、密码 | WebUI 的登录账号。读取配置只显示密码是否已保存 |
+| 分类 | 可留空，留空时用 qBittorrent 的默认分类 |
+| 保存路径 | qBittorrent 所在机器上的目录，可留空 |
+| 启用 | 打开后，资源搜索的候选上出现「发送到 qBittorrent」 |
+
+先点 **检查连接**。连上后点 **保存配置**。密码只留在本机凭据里，设置文件和读回的配置都不含密码。同一地址再次保存时，密码留空表示不改。
+
+Peach 只提交 `magnet:?xt=urn:btih:` 加上 infohash，不转发索引器附带的 tracker。文件落在 qBittorrent 的保存路径，不会自动整理进 Peach 馆藏。
+
+容器里的 `127.0.0.1` 指向 Peach 自己。qBittorrent 在另一台机器或宿主机上时，填写容器能够访问的地址，并让 WebUI 接受这个主机名。Peach 会带上与该地址一致的 Referer 和 Origin。
+
+WebAPI 2.14 起，登录失败返回 401，添加结果用计数字段表示；更早的版本用正文 `Ok.` 与 `Fails.`。两种响应都接受。自签 HTTPS 证书不会被跳过校验。
+
+排查时不要在截图或问题报告里露出密码。
 
 ## 常见问题
 

@@ -20,6 +20,7 @@ const downloads: DownloadSettingsState = {
   token_set: false, pikpak: { logged_in: false, username: '', remember: false, method: 'password' },
   pikpak_browser: { available: true, state: 'idle', message: '' }, pikpak_roots: [],
   providers: [{ key: '115', label: '115' }, { key: 'pikpak', label: 'PikPak' }], max_wait_hours: 1440,
+  qbittorrent: { enabled: false, url: '', username: '', password_set: false, category: '', save_path: '' },
 };
 const full = () => data({ downloads, startup: {
   available: true, enabled: false, silent: true, desktop: false, desktop_message: '', message: '',

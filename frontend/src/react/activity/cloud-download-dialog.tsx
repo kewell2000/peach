@@ -126,7 +126,8 @@ function SubmitForm({ header, snapshot, prefill, close, receipt, provider: prefe
             {work ? <Help>{[work.performers, work.studio, work.release_date, work.duration ? `${Math.round(work.duration / 60)} 分钟` : ''].filter(Boolean).join(' · ')}</Help> : null}
           </div>
         </div> : null}
-        <ResourceSearch initialCode={prefill.code ?? ''} reason={prefill.searchReason} onSearch={requested => {
+        <ResourceSearch qbittorrentReady={snapshot.qbittorrent?.ready === true}
+          initialCode={prefill.code ?? ''} reason={prefill.searchReason} onSearch={requested => {
           if (!sameWorkCode(requested, work?.code)) { setWork(sameWorkCode(requested, prefill.code) ? prefill : null); setMagnet('') }
           setCode(requested);
         }} onWork={next => setWork(current => next ? sameWorkCode(current?.code, next.code)

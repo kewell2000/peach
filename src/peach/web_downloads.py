@@ -72,7 +72,11 @@ def q_downloads(contract, args) -> dict:
         limit = int(args.get("limit") or 100)
     except (TypeError, ValueError):
         limit = 100
-    return _service(contract).snapshot(limit)
+    service = _service(contract)
+    snapshot = service.snapshot(limit)
+    from .downloads_qbittorrent import ready
+    snapshot["qbittorrent"] = {"ready": ready(service)}
+    return snapshot
 
 
 def w_download_submit(contract, body) -> dict:
@@ -120,7 +124,28 @@ def settings_payload(service: DownloadService, declared_roots) -> dict:
         "pikpak_roots": list(declared_roots.get("pikpak", ())),
         "providers": [{"key": key, "label": label} for key, label in PROVIDER_LABELS.items()],
         "max_wait_hours": MAX_WAIT_HOURS,
+        "qbittorrent": _qbittorrent_public(service),
     }
+
+
+def _qbittorrent_public(service: DownloadService) -> dict:
+    from .downloads_qbittorrent import public_settings
+    return public_settings(service)
+
+
+def save_qbittorrent(service: DownloadService, body: dict) -> dict:
+    from .downloads_qbittorrent import save_config
+    return save_config(service, body)
+
+
+def check_qbittorrent(service: DownloadService, body: dict) -> dict:
+    from .downloads_qbittorrent import check_connection
+    return check_connection(service, body if isinstance(body, dict) else {})
+
+
+def add_qbittorrent(service: DownloadService, body: dict) -> dict:
+    from .downloads_qbittorrent import add_magnet
+    return add_magnet(service, body)
 
 
 def save_settings(service: DownloadService, body: dict, declared_roots) -> dict:

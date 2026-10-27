@@ -58,6 +58,28 @@ async function open(readOnly = false) {
   return { host, toast };
 }
 
+it('没有云下载也没有 qBittorrent 时提示去配置渠道', async () => {
+  serve(listed([want(2)]));
+  const { host } = await open();
+  await vi.waitFor(() => expect(host.textContent).toContain('尚未配置下载渠道'));
+});
+
+it('只启用 qBittorrent 时不再提示尚未配置下载渠道', async () => {
+  const fetcher = serve(listed([want(2)]));
+  fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.startsWith('/api/downloads')) return { ok: true, status: 200, json: async () => ({
+      available: true, providers: [], tasks: [], qbittorrent: { ready: true } }) };
+    if (url.startsWith('/api/wants/magnets')) return { ok: true, status: 200,
+      json: async () => ({ state: 'ready', items: [], error: '', checked_at: null }) };
+    if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ created: true, want: want(99) }) };
+    return { ok: true, status: 200, json: async () => structuredClone(listed([want(2)])) };
+  });
+  const { host } = await open();
+  await vi.waitFor(() => expect(fetcher.mock.calls.some(([url]) => String(url).startsWith('/api/downloads'))).toBe(true));
+  await settle();
+  expect(host.textContent).not.toContain('尚未配置下载渠道');
+});
+
 it('按待找、未发售、暂时放弃、已入库分段，段名带条数；只有暂时放弃的那条能重新查找', async () => {
   serve(listed([
     want(1, { phase: 'acquired', acquired_at: '2026-09-30 12:00:00' }),

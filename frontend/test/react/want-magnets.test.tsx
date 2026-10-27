@@ -2,6 +2,7 @@ import { act } from 'react';
 import { QueryClientProvider, notifyManager } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { queryClient } from '../../src/react/query';
+import type { DownloadsSnapshot } from '../../src/react/bundle';
 import { WantMagnets, type MagnetCandidate } from '../../src/react/wants/want-magnets';
 import type { Want } from '../../src/react/wants/wants';
 import { WANTS_KEY, type WantsData } from '../../src/react/wants/wants';
@@ -16,7 +17,10 @@ const candidate: MagnetCandidate = {
   name: 'DEMO-001 HD', size: '4 GB', files: '2 個文件', date: '2026-10-01', attributes: ['字幕', '高清'],
   source: 'JavDB', source_url: 'https://javdb.com/v/demo', origins: ['https://javdb.com/v/demo'],
 };
-async function open(items = [candidate], readOnly = false, ok = true) {
+const cloudDownloads: DownloadsSnapshot = {
+  available: true, providers: [{ key: '115', label: '115', configured: true, target: '/下载' }], tasks: [],
+};
+async function open(items = [candidate], readOnly = false, ok = true, downloads: DownloadsSnapshot = cloudDownloads) {
   vi.stubGlobal('IntersectionObserver', undefined);
   const toast = vi.fn();
   const fetcher = vi.fn(async (_url: string, init?: RequestInit) => ({ ok: true, status: 200,
@@ -27,8 +31,7 @@ async function open(items = [candidate], readOnly = false, ok = true) {
   vi.stubGlobal('fetch', fetcher);
   const host = await mount(<QueryClientProvider client={queryClient}>
     <WantMagnets want={{ id: 1, code: 'DEMO-001', title: '演示作品' } as Want} readOnly={readOnly}
-      downloads={{ available: true, providers: [{ key: '115', label: '115', configured: true, target: '/下载' }], tasks: [] }}
-      provider="115" toast={toast} />
+      downloads={downloads} provider="115" toast={toast} />
   </QueryClientProvider>);
   await settle();
   return { host, fetcher, toast };
@@ -195,6 +198,79 @@ it('过期的内存缓存随卡片进入视口重新查询', async () => {
   await act(async () => reveal!());
   await settle();
   expect(fetcher).toHaveBeenCalledOnce();
+});
+
+it('只配置 qBittorrent 时，添加下载把磁链发给资源搜索同一条接口', async () => {
+  const { host, fetcher, toast } = await open([candidate], false, true, {
+    available: false, providers: [], tasks: [], qbittorrent: { ready: true },
+  });
+  const add = buttonNamed('添加下载', host)!;
+  expect(add.disabled).toBe(false);
+  expect(add.title).toBe('发送到 qBittorrent');
+  await click(add);
+  await settle();
+  const writes = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST');
+  expect(writes).toHaveLength(1);
+  expect(String(writes[0]?.[0])).toBe('/api/configuration/downloads/qbittorrent/add');
+  expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ magnet: candidate.uri });
+  expect(toast).toHaveBeenCalledWith('已发送到 qBittorrent');
+  expect(buttonNamed('已发送', host)?.disabled).toBe(true);
+});
+
+it('云下载和 qBittorrent 都就绪时，添加下载仍提交到原来的云渠道', async () => {
+  const { host, fetcher, toast } = await open([candidate], false, true, {
+    ...cloudDownloads, qbittorrent: { ready: true },
+  });
+  await click(buttonNamed('添加下载', host));
+  await settle();
+  const writes = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST');
+  expect(String(writes[0]?.[0])).toBe('/api/downloads');
+  expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({ magnet: candidate.uri, provider: '115', target: '/下载',
+    code: 'DEMO-001', title: '演示作品', origin: 'wishlist:1' });
+  expect(toast).toHaveBeenCalledWith('已添加下载：DEMO-001 HD');
+  expect(buttonNamed('已发送', host)).toBeNull();
+});
+
+it('没有云下载也没有 qBittorrent 时，添加下载保持禁用', async () => {
+  const { host, fetcher } = await open([candidate], false, true, {
+    available: true, providers: [], tasks: [], qbittorrent: { ready: false },
+  });
+  const add = buttonNamed('添加下载', host)!;
+  expect(add.disabled).toBe(true);
+  await click(add);
+  await settle();
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+});
+
+it('只读时即使 qBittorrent 就绪也不能添加', async () => {
+  const { host } = await open([candidate], true, true, {
+    available: true, providers: [], tasks: [], qbittorrent: { ready: true },
+  });
+  expect(buttonNamed('添加下载', host)?.disabled).toBe(true);
+});
+
+it('qBittorrent 拒绝时把原因留在卡片，按钮可以再试', async () => {
+  vi.stubGlobal('IntersectionObserver', undefined);
+  const toast = vi.fn();
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => ({
+    ok: init?.method !== 'POST', status: init?.method === 'POST' ? 400 : 200,
+    json: async () => init?.method === 'POST'
+      ? { detail: 'qBittorrent 没有接受这个磁力' }
+      : { state: 'ready', items: [candidate], error: '', checked_at: null },
+  }));
+  vi.stubGlobal('fetch', fetcher);
+  const host = await mount(<QueryClientProvider client={queryClient}>
+    <WantMagnets want={{ id: 1, code: 'DEMO-001', title: '演示作品' } as Want} readOnly={false}
+      downloads={{ available: true, providers: [], tasks: [], qbittorrent: { ready: true } }}
+      provider="115" toast={toast} />
+  </QueryClientProvider>);
+  await settle();
+  await click(buttonNamed('添加下载', host));
+  await settle();
+  expect(host.textContent).toContain('qBittorrent 没有接受这个磁力');
+  expect(buttonNamed('已发送', host)).toBeNull();
+  expect(buttonNamed('添加下载', host)?.disabled).toBe(false);
+  expect(toast).not.toHaveBeenCalled();
 });
 
 it('已取得磁链更新清单筛选状态，ED2K 不计作磁链', async () => {

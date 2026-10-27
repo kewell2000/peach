@@ -207,7 +207,7 @@ export function WantList({ readOnly, toast, query = '' }: WantListProps) {
       {wants.isPending ? <div role="status" aria-label="正在读取想要" dangerouslySetInnerHTML={{ __html: javContentSkeleton('wants') }} /> : null}
       {data?.scraping ? <Help role="status">正在给刚加入的番号取资料与封面。</Help> : null}
       {downloads.error ? <Note tone="error" title="下载配置未取得">{errorMessage(downloads.error)}</Note> : null}
-      {downloads.data && !configured.length ? <Note tone="neutral">尚未配置下载渠道。<a href={'/settings/library?section=' + encodeURIComponent('下载渠道')}>下载渠道设置</a></Note> : null}
+      {downloads.data && !configured.length && !downloads.data.qbittorrent?.ready ? <Note tone="neutral">尚未配置下载渠道。<a href={'/settings/library?section=' + encodeURIComponent('下载渠道')}>下载渠道设置</a></Note> : null}
       {downloads.data && !downloads.data.available ? <Note tone="neutral">云下载只在允许修改数据库的设备上可用。</Note> : null}
 
       {data && !items.length ? (

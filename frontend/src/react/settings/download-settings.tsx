@@ -7,7 +7,7 @@
  * 推送发现推一个目录，已经存在就直接存上。地址、还没存的目标目录与 PikPak 根留空时，检查把
  * 探测到的、按推送发现推出的值填回表单，点「保存配置」才落盘；推出的目录不存在时给一颗
  * 「新建这个目录」，只有点了才在 CloudDrive2 里建。第二张是 PikPak 账号，提供账号密码与浏览器登录。
- * 第三张是 qBittorrent：把资源搜索里的磁力交给 WebUI，文件留在 qBittorrent 的保存路径。
+ * 第三张是 qBittorrent：把资源搜索和资源链接里的磁力交给 WebUI，文件留在 qBittorrent 的保存路径。
  *
  * 令牌与密码只往本机凭据文件写，读接口只回「存没存过」，所以令牌框保存后清空、提示改成
  * 「已保存，留空不改」。PikPak 要人机验证时服务端回一个验证页地址，这里给出链接让用户在浏览器
@@ -274,7 +274,7 @@ function QbitCard({ initial, receipt }: { initial: QbitSettings; receipt(message
   return (
     <Section title="qBittorrent" onSubmit={submit}>
       <Stack>
-        <Help>把资源搜索里的磁力交给 qBittorrent WebUI。文件留在它的保存路径。</Help>
+        <Help>把磁力交给 qBittorrent WebUI，文件留在它的保存路径。资源搜索可以直接发送。只配置了 qBittorrent 时，想要和发现里的「添加下载」也发到这里。</Help>
         <Input label="qBittorrent 地址" placeholder="http://192.0.2.17:8085" autoComplete="off" maxLength={2048}
           hint="协议、主机、端口和可选路径。用户名和密码单独填写。"
           value={form.url} onChange={(url) => patch({ url })} />

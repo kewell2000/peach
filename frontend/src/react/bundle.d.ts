@@ -220,7 +220,7 @@ export interface DownloadsSnapshot {
   available: boolean;
   providers: { key: DownloadProviderKey; label: string; configured: boolean; target: string }[];
   tasks: DownloadTask[];
-  /** 已保存并启用 qBittorrent 时，资源搜索可以发送磁力。 */
+  /** 已保存并启用 qBittorrent 时，资源搜索和资源链接可以发送磁力。 */
   qbittorrent?: { ready: boolean };
 }
 

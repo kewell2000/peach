@@ -1,4 +1,4 @@
-/* 卡片下方的磁链候选。可见时查询，提交复用云下载的幂等与失败分类。 */
+/* 卡片下方的磁链候选。可见时查询。已配置的云下载仍走原渠道；只有 qBittorrent 就绪时，磁链走资源搜索同一条添加。 */
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { RiLink, RiHardDrive2Line, RiFileList2Line,
   RiCalendarLine, RiPriceTag3Line, RiExternalLinkLine, RiFileCopyLine, RiCloudLine, RiRefreshLine } from '@remixicon/react';
@@ -8,6 +8,7 @@ import { Chip } from '@/components/base/badges/chip';
 import { apiGet, apiSend, errorMessage } from '../../api';
 import type { DownloadsSnapshot, DownloadSubmitResult } from '../bundle';
 import { DOWNLOADS_KEY, DOWNLOADS_URL } from '../activity/downloads-panel';
+import { QBITTORRENT_SENT, submitQbittorrentMagnet } from '../activity/qbittorrent-submit';
 import { LoadingDots } from '../components/loading-dots';
 import { Note } from '../components/note';
 import { busyProps, useAction } from '../settings/use-action';
@@ -34,6 +35,14 @@ export interface MagnetResult {
 
 function ResourceFact({ icon: Icon, children, title }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>; children: ReactNode; title?: string }) {
   return <span title={title} className="inline-flex items-center gap-1"><Icon aria-hidden className="size-3.5 shrink-0" />{children}</span>;
+}
+
+/** 云下载可用时保持原渠道。qBittorrent 只补上没有可用云下载的磁链。 */
+function magnetTarget(downloads: DownloadsSnapshot | undefined, provider: string, readOnly: boolean) {
+  const cloud = downloads?.providers.find((row) => row.key === provider && row.configured);
+  if (!readOnly && cloud && downloads?.available) return { destination: 'cloud' as const, cloud };
+  if (!readOnly && downloads?.qbittorrent?.ready === true) return { destination: 'qbittorrent' as const, cloud: undefined };
+  return { destination: 'none' as const, cloud };
 }
 
 export function WantMagnets({ want, readOnly, downloads, provider, toast, onSource, queryUrl }: {
@@ -85,12 +94,21 @@ export function WantMagnets({ want, readOnly, downloads, provider, toast, onSour
     if (!queryUrl && query.data && (query.data.state === 'ready' || query.data.items.length > 0))
       recordWantMagnets(want.id, query.data.items.some(item => item.protocol === 'magnet'));
   }, [query.data, queryUrl, want.id]);
-  const configured = downloads?.providers.find((row) => row.key === provider && row.configured);
+  const target = magnetTarget(downloads, provider, readOnly);
   const add = (candidate: MagnetCandidate) => {
-    if (readOnly || !downloads?.available || !configured || candidate.protocol !== 'magnet') return;
+    if (target.destination === 'none' || candidate.protocol !== 'magnet') return;
+    if (target.destination === 'qbittorrent') {
+      void action.run(candidate.id, (signal) => submitQbittorrentMagnet(candidate.uri, signal), () => {
+        setSubmitted((current) => [...current, candidate.id]);
+        toast(QBITTORRENT_SENT);
+      });
+      return;
+    }
+    const cloud = target.cloud;
+    if (!cloud) return;
     void action.run(candidate.id, async (signal) => {
       const result = await apiSend<DownloadSubmitResult>(DOWNLOADS_URL, {
-        magnet: candidate.uri, provider: configured.key, target: configured.target,
+        magnet: candidate.uri, provider: cloud.key, target: cloud.target,
         code: want.code, title: want.title, origin: queryUrl ? `work:${want.code}` : `wishlist:${want.id}`,
       }, 'POST', signal);
       if (!result.ok) throw new Error(result.task.failure_detail || result.task.failure_label || '添加下载失败');
@@ -125,8 +143,11 @@ export function WantMagnets({ want, readOnly, downloads, provider, toast, onSour
       {action.error ? <Note tone="error" title="操作未完成">{action.error}</Note> : null}
       {query.data?.items.length ? (() => {
         const rows = query.data.items.map((candidate) => {
-          const added = submitted.includes(candidate.id) || downloads?.tasks.some((task) => candidate.protocol === 'magnet' &&
-            task.info_hash === candidate.info_hash && (task.cancellable || task.state === 'ingested'));
+          const sent = submitted.includes(candidate.id);
+          const tracked = downloads?.tasks.some((task) => candidate.protocol === 'magnet' &&
+            task.info_hash === candidate.info_hash && (task.cancellable || task.state === 'ingested')) ?? false;
+          const added = sent || tracked;
+          const label = sent && target.destination === 'qbittorrent' && !tracked ? '已发送' : added ? '已添加' : '添加下载';
           return <li key={candidate.id} data-resource-protocol={candidate.protocol}>
             <div data-resource-main="" className="flex min-w-0 flex-col gap-1">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -145,9 +166,11 @@ export function WantMagnets({ want, readOnly, downloads, provider, toast, onSour
             </div>
             <div data-resource-actions="" className="flex flex-wrap gap-2">
               {candidate.protocol === 'magnet' ?
-              <Button variant="primary" size="small" leadingIcon={configured ? PROVIDER_ICONS[configured.key] : RiCloudLine} title={configured ? `下载到 ${configured.label}` : undefined} disabled={readOnly || !downloads?.available || !configured || added}
+              <Button variant="primary" size="small" leadingIcon={target.destination === 'qbittorrent' ? undefined : target.cloud ? PROVIDER_ICONS[target.cloud.key] : RiCloudLine}
+                title={target.destination === 'qbittorrent' ? '发送到 qBittorrent' : target.cloud ? `下载到 ${target.cloud.label}` : undefined}
+                disabled={target.destination === 'none' || added}
                 {...busyProps(action.busy === candidate.id)} onClick={() => add(candidate)}>
-                {added ? '已添加' : '添加下载'}
+                {label}
               </Button> : null}
               <Button variant={candidate.protocol === 'magnet' ? 'secondary' : 'primary'} size="small" leadingIcon={RiFileCopyLine} {...busyProps(action.busy === `copy:${candidate.id}`)}
                 onClick={() => copy(candidate)}>复制链接</Button>

@@ -5,12 +5,13 @@ import { spinnerHtml } from '@peach/legacy/ui';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/base/input/input';
 import { Select, SelectItem } from '@/components/base/select/select';
-import { apiGet, apiSend, errorMessage } from '../../api';
+import { apiGet, errorMessage } from '../../api';
 import { ErrorText, FieldLabel, Help } from '../settings/section';
 import { busyProps, useAction } from '../settings/use-action';
 import { coverUrl } from '@peach/card-art';
 import type { MediaPage } from '../catalog-grid/types';
 import type { DownloadPrefill } from './cloud-download-dialog';
+import { QBITTORRENT_SENT, submitQbittorrentMagnet } from './qbittorrent-submit';
 import { sameWorkCode } from './work-code';
 
 interface Candidate {
@@ -48,10 +49,9 @@ export function ResourceSearch({ initialCode, reason, choose, onSearch, onWork, 
   const send = (item: Candidate) => {
     setSent((current) => ({ ...current, [item.id]: '' }));
     setSendError((current) => ({ ...current, [item.id]: '' }));
-    void sendAction.run(item.id, (signal) => apiSend<{ ok: boolean }>(
-      '/api/configuration/downloads/qbittorrent/add', { magnet: item.uri }, 'POST', signal),
+    void sendAction.run(item.id, (signal) => submitQbittorrentMagnet(item.uri, signal),
     () => {
-      setSent((current) => ({ ...current, [item.id]: '已发送到 qBittorrent' }));
+      setSent((current) => ({ ...current, [item.id]: QBITTORRENT_SENT }));
       setSendError((current) => ({ ...current, [item.id]: '' }));
     },
     (cause) => setSendError((current) => ({ ...current, [item.id]: errorMessage(cause) })));

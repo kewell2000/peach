@@ -93,4 +93,6 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api --method PUT -H "Accept: application/vnd.github+json" /user/packages/container/peach/visibility -f visibility=public
+        run: |
+          gh api --method PUT -H "Accept: application/vnd.github+json" \
+            /user/packages/container/peach/visibility -f visibility=public

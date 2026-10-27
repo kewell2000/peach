@@ -76,18 +76,36 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: 发布到 GHCR
+      - name: 计算 GHCR 标签
+        id: ghcr
         if: github.repository == 'kewell2000/peach' && github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/cursor/qbittorrent-download-0e14')
         env:
           OWNER: ${{ github.repository_owner }}
         run: |
           owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
-          image="ghcr.io/${owner}/peach"
           short=$(git rev-parse --short=7 HEAD)
-          docker tag longmeidao/peach:test "${image}:qbit-${short}"
-          docker tag longmeidao/peach:test "${image}:qbittorrent"
-          docker push "${image}:qbit-${short}"
-          docker push "${image}:qbittorrent"
+          image="ghcr.io/${owner}/peach"
+          {
+            echo "image=${image}"
+            echo "short=${short}"
+            echo "tags<<EOF"
+            echo "${image}:qbit-${short}"
+            echo "${image}:qbittorrent"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: 发布到 GHCR
+        id: ghcr_push
+        if: github.repository == 'kewell2000/peach' && github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/cursor/qbittorrent-download-0e14')
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          outputs: type=registry,oci-mediatypes=false
+          tags: ${{ steps.ghcr.outputs.tags }}
       - name: 尝试把 GHCR 包设为公开
         if: github.repository == 'kewell2000/peach' && github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/cursor/qbittorrent-download-0e14')
         continue-on-error: true
@@ -96,3 +114,41 @@ jobs:
         run: |
           gh api --method PUT -H "Accept: application/vnd.github+json" \
             /user/packages/container/peach/visibility -f visibility=public
+      - name: 核对 GHCR 使用 Docker 清单
+        if: github.repository == 'kewell2000/peach' && github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/cursor/qbittorrent-download-0e14')
+        env:
+          IMAGE: ${{ steps.ghcr.outputs.image }}
+          SHORT: ${{ steps.ghcr.outputs.short }}
+          DIGEST: ${{ steps.ghcr_push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          repo="${IMAGE#ghcr.io/}"
+          accept="application/vnd.docker.distribution.manifest.v2+json"
+          echo "build digest ${DIGEST}"
+          token=$(curl -fsS "https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          check() {
+            tag="$1"
+            url="https://ghcr.io/v2/${repo}/manifests/${tag}"
+            code="000"
+            attempt=1
+            while [ "$attempt" -le 6 ]; do
+              code=$(curl -sS -o /tmp/ghcr-manifest.json -D /tmp/ghcr-manifest.headers -w '%{http_code}' \
+                -H "Authorization: Bearer ${token}" \
+                -H "Accept: ${accept}" \
+                "$url" || true)
+              echo "${tag} attempt ${attempt} HTTP ${code}"
+              if [ "$code" = "200" ]; then
+                python3 -c 'import json,sys; m=json.load(open("/tmp/ghcr-manifest.json")); mt=m.get("mediaType"); cfg=(m.get("config") or {}).get("mediaType"); print("mediaType", mt); print("config", cfg); sys.exit(0 if mt=="application/vnd.docker.distribution.manifest.v2+json" and cfg=="application/vnd.docker.container.image.v1+json" else 1)'
+                tr -d '\r' < /tmp/ghcr-manifest.headers | awk 'BEGIN{IGNORECASE=1} /^docker-content-digest:/ {print}'
+                return 0
+              fi
+              attempt=$((attempt + 1))
+              sleep 5
+            done
+            echo "清单仍不可用：HTTP ${code}" >&2
+            cat /tmp/ghcr-manifest.json >&2 || true
+            return 1
+          }
+          check qbittorrent
+          check "qbit-${SHORT}"

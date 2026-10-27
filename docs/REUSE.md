@@ -54,7 +54,7 @@ Actions 工作流静态检查复用 actionlint 1.7.12（MIT，`rhysd/actionlint:
 
 界面逐字采用 MIT 许可的 BoardUI Tree View、Breadcrumb 与 Direction，固定源码 SHA-256 见 `frontend/src/react/boardui/ORIGIN.md`；复用现有 React 19.3.0、React Aria Components 1.22.1、Motion 14.1.0 与 Remix Icon 4.9.0，无新增依赖。Peach 的原生链接适配上游 `next/link` 槽，领域逻辑仅承担目录归属、冲突保留、范围确认和来源撤回。能力检索覆盖当前媒体库分组、目录否定、字段归属和 `media_libraries.py` 的 Git 历史；物理目录整理继续使用既有入口。验证只使用临时账本与合成馆藏。
 
-Linux Docker 容器复用 Docker 官方 Python `3.14.8-slim-trixie`、uv `0.13.1`（MIT/Apache-2.0），以及 Docker 官方 Buildx、login-action 和 build-push-action 的「先验收再发布」流程。Python 镜像许可证随上游组件保留，FFmpeg 使用 Debian 包及其许可证。Peach 差异仅为配置重载、资料处理请求与持久化路径；不引入新 Python 依赖，不改写真实 ledger。CloudDrive2 使用其官方独立服务，不复制其代码或打包进 Peach。部署与证据范围见 [Docker 部署](DOCKER.md)。
+Linux Docker 容器复用 Docker 官方 Python `3.14.8-slim-trixie`、uv `0.13.1`（MIT/Apache-2.0），以及 Docker 官方 Buildx、login-action 和 build-push-action 的「先验收再发布」流程。GHCR 发布沿用同一 action 的 registry 输出，`oci-mediatypes=false`，并关闭 provenance 与 SBOM，清单媒体类型为 `application/vnd.docker.distribution.manifest.v2+json`。Python 镜像许可证随上游组件保留，FFmpeg 使用 Debian 包及其许可证。Peach 差异仅为配置重载、资料处理请求与持久化路径；不引入新 Python 依赖，不改写真实 ledger。CloudDrive2 使用其官方独立服务，不复制其代码或打包进 Peach。部署与证据范围见 [Docker 部署](DOCKER.md)。
 
 收藏窗口复用 React Aria 外壳、Peach 设置弹层布局及共用关闭控件 `SettingsDialogClose`。入口为中性星形按钮；实体分类和保存的筛选分别显示，已标记与稍后看位于导航底部。收藏图像复用实体引用、厂牌标识、本地代表作与已绑定在线来源的本地头像代理，通过全站图片回退链逐项尝试，不写入偏好。原始 BoardUI 源码哈希见 `docs/BOARD_UI.md`。Rule34 视频封面使用来源缩略图，图片保留原文件扩展名；失败图片在关注数据刷新时重新尝试。无新增运行时依赖或真实 ledger 写入。
 

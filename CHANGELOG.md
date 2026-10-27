@@ -21,6 +21,12 @@ Removed / Fixed / Security。
 
 ## [未发布]
 
+## [0.46.2] - 2026-10-27
+
+### 修复
+
+- **更新**：GHCR 上的 Peach 镜像使用 Docker 清单媒体类型 `application/vnd.docker.distribution.manifest.v2+json`，群晖 Container Manager 可以拉取 `qbittorrent` 标签。
+
 ## [0.46.1] - 2026-10-19
 
 ### 新增
@@ -617,7 +623,8 @@ Removed / Fixed / Security。
 - **桌面**：独立包使用 UTF-8 启动日志。
 - **配置**：首次设置后的跳转目标取新鲜读到的 mDNS 名。
 
-[未发布]: https://github.com/peach-mitao/peach/compare/v0.46.1...HEAD
+[未发布]: https://github.com/peach-mitao/peach/compare/v0.46.2...HEAD
+[0.46.2]: https://github.com/peach-mitao/peach/compare/v0.46.1...v0.46.2
 [0.46.1]: https://github.com/peach-mitao/peach/compare/v0.45.0...v0.46.1
 [0.45.0]: https://github.com/peach-mitao/peach/compare/v0.43.0...v0.45.0
 [0.43.0]: https://github.com/peach-mitao/peach/compare/v0.42.0...v0.43.0

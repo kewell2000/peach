@@ -106,3 +106,5 @@ Linux 容器不读取用户电脑上的浏览历史，也不包含交互式浏�
 GitHub Actions 的 `Docker` 工作流先构建并运行临时卷验收，通过后发布。仓库变量 `DOCKERHUB_USERNAME` 和机密 `DOCKERHUB_TOKEN` 用于 Docker Hub 发布；机密只保存在 GitHub，不进入项目文件。未配置发布身份时仍执行构建验收。ARM 镜像需通过同等运行验收后再加入发布。
 
 kewell2000/peach 这个 fork 用同一套构建和临时卷验收，把 `linux/amd64` 镜像推到 `ghcr.io/kewell2000/peach`。标签是 `qbit-<短提交号>` 和 `qbittorrent`。群晖 Compose 把 `image` 写成 `ghcr.io/kewell2000/peach:qbittorrent`，并保留 `peach-data` 卷。镜像必须带上已提交的 `web/dist`，设置页和资源搜索里的 qBittorrent 才在容器里。这一路只用 `GITHUB_TOKEN` 推 GHCR，不读取 Docker Hub 凭据。若 Actions 没能把包改成公开，到 GitHub Packages 把容器包 `peach` 设为 Public 后再拉取。
+
+GHCR 清单的媒体类型是 `application/vnd.docker.distribution.manifest.v2+json`。发布步骤使用 `docker/build-push-action` 的 registry 输出，设置 `oci-mediatypes=false`，并关闭 provenance 与 SBOM。群晖 Container Manager 和只声明 Docker v2 Accept 的客户端可以拉取 `qbittorrent` 与 `qbit-<短提交号>`。容器里的 `/healthz` 返回当前 `__version__`，用来确认跑的是哪一份镜像。

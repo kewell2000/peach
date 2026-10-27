@@ -94,6 +94,9 @@ def main() -> None:
         docker("run", "-d", "--name", name, "--network", "none",
                "--mount", f"type=volume,source={volume},target=/data", args.image)
         ready(name)
+        health = json.loads(request(name, "/healthz", authenticated=False))
+        packaged = docker("exec", name, "python", "-c", "import peach; print(peach.__version__, end='')")
+        assert health.get("version") == packaged and packaged, health
         assert docker("exec", name, "id", "-u") == "1000"
         assert json.loads(request(name, "/api/items")) is not None
         assert json.loads(request(name, "/api/items", authenticated=False)) == {"status": 401}
@@ -138,9 +141,9 @@ def main() -> None:
         docker("restart", "--time", "75", name)
         ready(name)
         assert docker("exec", name, "cat", config_path) == original
-        print(json.dumps({"image": args.image, "checks": ["non-root", "ready", "auth", "configuration",
-                                                         "scan", "range", "vaapi-stack", "transcode-fallback",
-                                                         "reload", "restart", "persistence"]}))
+        print(json.dumps({"image": args.image, "version": packaged, "checks": [
+            "version", "non-root", "ready", "auth", "configuration", "scan", "range",
+            "vaapi-stack", "transcode-fallback", "reload", "restart", "persistence"]}))
     finally:
         docker("rm", "--force", name, check=False)
         docker("volume", "rm", volume, check=False)

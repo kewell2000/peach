@@ -56,7 +56,7 @@ Peach 只提交 `magnet:?xt=urn:btih:` 加上 infohash，不转发索引器附�
 
 容器里的 `127.0.0.1` 指向 Peach 自己。qBittorrent 在另一台机器或宿主机上时，填写容器能够访问的地址，并让 WebUI 接受这个主机名。Peach 会带上与该地址一致的 Referer 和 Origin。
 
-WebAPI 2.14 起，登录失败返回 401，添加结果用计数字段表示；更早的版本用正文 `Ok.` 与 `Fails.`。两种响应都接受。自签 HTTPS 证书不会被跳过校验。
+WebAPI 2.14 起，登录失败返回 401，添加结果用计数字段表示；更早的版本用正文 `Ok.` 与 `Fails.`。5.2 的登录成功是 204、空正文，会话 cookie 以 `QBT_SID_` 开头；200、正文 `Ok.` 和 cookie `SID` 同样接受。自签 HTTPS 证书不会被跳过校验。
 
 排查时不要在截图或问题报告里露出密码。
 

@@ -3,10 +3,11 @@
 只覆盖登录、读版本、按需建分类和 ``torrents/add``。密码留在本机凭据文件，
 地址、开关、分类和保存路径留在本机状态文件。不写账本，也不改 115 / PikPak 的任务。
 
-协议对照 qBittorrent WebAPI 文档与 changelog 至 2.15.1：登录成功正文是 ``Ok.``，
-失败在旧版是 ``Fails.``、2.14 起是 401；添加在旧版回 ``Ok.``，2.14 起回
-``success_count`` / ``pending_count`` / ``failure_count``。请求带与主机一致的
-``Referer`` 和 ``Origin``，不跟随重定向，响应有大小上限。
+协议对照 qBittorrent WebAPI 文档与 changelog 至 2.15.1。登录成功有两种：
+200 且正文是 ``Ok.``、cookie 名为 ``SID``；5.2 起是 204、空正文、cookie 名以
+``QBT_SID_`` 开头。失败正文是 ``Fails.``，或状态 401。添加在正文 ``Ok.`` 或
+``success_count`` / ``pending_count`` / ``failure_count`` 两种形状下都算完成。
+请求带与主机一致的 ``Referer`` 和 ``Origin``，不跟随重定向，响应有大小上限。
 """
 from __future__ import annotations
 
@@ -238,7 +239,7 @@ class _Session:
             raise QbitError("qBittorrent 暂时拒绝了这次登录，请稍后再试")
         if status == 401 or text == "Fails.":
             raise QbitError("qBittorrent 用户名或密码不正确")
-        if status != 200 or text not in {"Ok.", "Ok"} or not self.client.cookies.get("SID"):
+        if not _login_accepted(status, text, self.client.cookies):
             raise QbitError("qBittorrent 没有完成登录")
 
     def logout(self) -> None:
@@ -272,6 +273,20 @@ class _Session:
             fields["category"] = category
         status, body = self.call("POST", "/api/v2/torrents/add", data=fields)
         return _added(status, body)
+
+
+def _session_cookie(cookies: httpx.Cookies) -> bool:
+    """5.2 起会话 cookie 按端口命名，避免同一台机器上的多个 WebUI 互相覆盖。"""
+    return any(cookie.name == "SID" or cookie.name.startswith("QBT_SID_")
+               for cookie in cookies.jar)
+
+
+def _login_accepted(status: int, text: str, cookies: httpx.Cookies) -> bool:
+    if not _session_cookie(cookies):
+        return False
+    if status == 204:
+        return text == ""
+    return status == 200 and text in {"Ok.", "Ok"}
 
 
 def _plain(body: bytes) -> str:

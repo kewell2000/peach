@@ -27,12 +27,13 @@ def _form(request: httpx.Request) -> dict[str, list[str]]:
 class _WebUI:
     def __init__(self, *, login_status=200, login_body=b"Ok.", add_status=200,
                  add_body=b'{"success_count":1,"pending_count":0,"failure_count":0}',
-                 category_status=200):
+                 category_status=200, session_cookie="SID=sid-token"):
         self.login_status = login_status
         self.login_body = login_body
         self.add_status = add_status
         self.add_body = add_body
         self.category_status = category_status
+        self.session_cookie = session_cookie
         self.calls: list[httpx.Request] = []
         self.transport = httpx.MockTransport(self._handle)
 
@@ -42,8 +43,8 @@ class _WebUI:
         if path.endswith("/auth/login"):
             if self.login_status in {301, 302, 303, 307, 308}:
                 return httpx.Response(self.login_status, headers={"Location": "http://192.0.2.99/other"})
-            return httpx.Response(self.login_status, content=self.login_body,
-                                   headers={"Set-Cookie": "SID=sid-token; Path=/"})
+            headers = {"Set-Cookie": f"{self.session_cookie}; HttpOnly; Path=/"} if self.session_cookie else {}
+            return httpx.Response(self.login_status, content=self.login_body, headers=headers)
         if path.endswith("/app/webapiVersion"):
             return httpx.Response(200, content=b"2.15.1")
         if path.endswith("/app/version"):
@@ -177,6 +178,30 @@ class QbitRouteTests(_App):
         self.assertEqual(fields["category"], ["peach"])
         self.assertEqual(fields["autoTMM"], ["false"])
         self.assertNotIn("tr", fields["urls"][0])
+
+    def test_webapi_215_login_accepts_204_and_a_port_cookie(self):
+        self.web.login_status = 204
+        self.web.login_body = b""
+        self.web.session_cookie = "QBT_SID_8085=port-token"
+        self.save()
+        self.web.calls.clear()
+        report = self.local.post(CHECK_URL, json={"url": EXAMPLE, "username": "admin", "password": ""})
+        self.assertEqual(report.status_code, 200, report.text)
+        self.assertEqual(report.json()["ok"], True)
+        added = self.local.post(ADD_URL, json={"magnet": f"magnet:?xt=urn:btih:{HASH}"})
+        self.assertEqual(added.status_code, 200, added.text)
+        self.assertEqual(added.json()["ok"], True)
+        sent = [request.headers["cookie"] for request in self.web.calls
+                if request.url.path.endswith("/torrents/add")]
+        self.assertEqual(sent, ["QBT_SID_8085=port-token"])
+
+    def test_an_empty_204_without_a_session_cookie_is_not_a_login(self):
+        self.web.login_status = 204
+        self.web.login_body = b""
+        self.web.session_cookie = ""
+        report = self.local.post(CHECK_URL, json={"url": EXAMPLE, "username": "admin", "password": PASSWORD})
+        self.assertEqual(report.json()["ok"], False)
+        self.assertEqual(report.json()["message"], "qBittorrent 没有完成登录")
 
     def test_a_legacy_ok_and_an_existing_category_still_add(self):
         self.web.add_body = b"Ok."

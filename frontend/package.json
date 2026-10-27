@@ -40,7 +40,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "agentation": "3.1.2",
-    "happy-dom": "21.0.3",
+    "happy-dom": "21.0.4",
     "oxc-parser": "0.154.0",
     "oxlint": "1.88.0",
     "playwright-core": "1.64.1",

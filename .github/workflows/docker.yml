@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: [Dockerfile, .dockerignore, compose.yaml, 'src/**', 'migrations/**', 'web/**', 'resources/**', pyproject.toml, uv.lock, setup.py, MANIFEST.in, scripts/smoke_docker.py, .github/workflows/docker.yml]
   push:
-    branches: [master]
+    branches: [master, cursor/qbittorrent-download-0e14]
     tags: ['v*.*.*']
     paths: [Dockerfile, .dockerignore, compose.yaml, 'src/**', 'migrations/**', 'web/**', 'resources/**', pyproject.toml, uv.lock, setup.py, MANIFEST.in, scripts/smoke_docker.py, scripts/release_tag.py, .github/workflows/docker.yml]
   workflow_dispatch:
@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
   actions: read
+  packages: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -37,6 +38,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: linux/amd64
           load: true
           tags: longmeidao/peach:test
           cache-from: type=gha
@@ -67,3 +69,28 @@ jobs:
         run: |
           docker tag longmeidao/peach:test "$PUBLISH_TAG"
           docker push "$PUBLISH_TAG"
+      - name: 登录 GHCR
+        if: github.repository == 'kewell2000/peach' && github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/cursor/qbittorrent-download-0e14')
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 发布到 GHCR
+        if: github.repository == 'kewell2000/peach' && github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/cursor/qbittorrent-download-0e14')
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+          image="ghcr.io/${owner}/peach"
+          short=$(git rev-parse --short=7 HEAD)
+          docker tag longmeidao/peach:test "${image}:qbit-${short}"
+          docker tag longmeidao/peach:test "${image}:qbittorrent"
+          docker push "${image}:qbit-${short}"
+          docker push "${image}:qbittorrent"
+      - name: 尝试把 GHCR 包设为公开
+        if: github.repository == 'kewell2000/peach' && github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/cursor/qbittorrent-download-0e14')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api --method PUT -H "Accept: application/vnd.github+json" /user/packages/container/peach/visibility -f visibility=public

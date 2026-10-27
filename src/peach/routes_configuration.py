@@ -439,6 +439,42 @@ def create_download_folder(request: Request, body: dict = Body(...), _args=Depen
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.post("/api/configuration/downloads/qbittorrent")
+def save_qbittorrent(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
+    """保存 qBittorrent 地址、开关、分类、保存路径和密码。密码只写本机凭据。"""
+    local_only(request)
+    same_origin(request)
+    service, _roots = _downloads(request)
+    try:
+        return web_downloads.save_qbittorrent(service, body)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/api/configuration/downloads/qbittorrent/check")
+def check_qbittorrent(request: Request, body: dict = Body(default={}), _args=Depends(require_auth)):
+    """登录 WebUI 并读取版本。密码留空时用已保存的那一份，不写设置。"""
+    local_only(request)
+    same_origin(request)
+    service, _roots = _downloads(request)
+    try:
+        return web_downloads.check_qbittorrent(service, body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/api/configuration/downloads/qbittorrent/add")
+def add_qbittorrent(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
+    """把一条磁力交给已保存的 qBittorrent。不写入账本。"""
+    local_only(request)
+    same_origin(request)
+    service, _roots = _downloads(request)
+    try:
+        return web_downloads.add_qbittorrent(service, body)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.post("/api/configuration/downloads/pikpak/login")
 def login_pikpak(request: Request, body: dict = Body(...), _args=Depends(require_auth)):
     local_only(request)

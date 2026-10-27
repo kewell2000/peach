@@ -1,13 +1,13 @@
-/* 搜索只选择候选；真正提交由云下载表单确认。 */
+/* 搜索只选择候选。云下载由表单确认；已启用 qBittorrent 时，候选磁力可以直接发送。 */
 import { useEffect, useRef, useState } from 'react';
 import { RiSearchLine } from '@remixicon/react';
 import { spinnerHtml } from '@peach/legacy/ui';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/base/input/input';
 import { Select, SelectItem } from '@/components/base/select/select';
-import { apiGet } from '../../api';
+import { apiGet, apiSend, errorMessage } from '../../api';
 import { ErrorText, FieldLabel, Help } from '../settings/section';
-import { useAction } from '../settings/use-action';
+import { busyProps, useAction } from '../settings/use-action';
 import { coverUrl } from '@peach/card-art';
 import type { MediaPage } from '../catalog-grid/types';
 import type { DownloadPrefill } from './cloud-download-dialog';
@@ -29,9 +29,10 @@ function preferredGoal(reason: string | undefined): string {
   return 'quality';
 }
 
-export function ResourceSearch({ initialCode, reason, choose, onSearch, onWork }: {
+export function ResourceSearch({ initialCode, reason, choose, onSearch, onWork, qbittorrentReady = false }: {
   initialCode: string; reason?: string; choose(uri: string, code: string): void;
   onSearch?(code: string): void; onWork?(work: DownloadPrefill | null): void;
+  qbittorrentReady?: boolean;
 }) {
   const [code, setCode] = useState(initialCode);
   const [goal, setGoal] = useState(() => preferredGoal(reason));
@@ -40,11 +41,25 @@ export function ResourceSearch({ initialCode, reason, choose, onSearch, onWork }
   const [result, setResult] = useState<Result | null>(null);
   const [searched, setSearched] = useState('');
   const [selected, setSelected] = useState('');
+  const [sent, setSent] = useState<Record<string, string>>({});
+  const [sendError, setSendError] = useState<Record<string, string>>({});
   const action = useAction();
+  const sendAction = useAction();
+  const send = (item: Candidate) => {
+    setSent((current) => ({ ...current, [item.id]: '' }));
+    setSendError((current) => ({ ...current, [item.id]: '' }));
+    void sendAction.run(item.id, (signal) => apiSend<{ ok: boolean }>(
+      '/api/configuration/downloads/qbittorrent/add', { magnet: item.uri }, 'POST', signal),
+    () => {
+      setSent((current) => ({ ...current, [item.id]: '已发送到 qBittorrent' }));
+      setSendError((current) => ({ ...current, [item.id]: '' }));
+    },
+    (cause) => setSendError((current) => ({ ...current, [item.id]: errorMessage(cause) })));
+  };
   const metadataRequest = useRef<AbortController | null>(null);
   useEffect(() => () => metadataRequest.current?.abort(), []);
   const search = () => {
-    if (!code.trim() || action.busy) return;
+    if (!code.trim() || action.busy || sendAction.busy) return;
     const query = new URLSearchParams({ code: code.trim(), goal });
     if (min) query.set('min_size', String(Math.round(Number(min) * 1024 ** 3)));
     if (max) query.set('max_size', String(Math.round(Number(max) * 1024 ** 3)));
@@ -100,9 +115,15 @@ export function ResourceSearch({ initialCode, reason, choose, onSearch, onWork }
           <Help>{[item.size > 0 ? `${(item.size / 1024 ** 3).toFixed(2)} GiB` : '体积未取得', item.seeders >= 0 ? `${item.seeders} 个做种` : '做种未取得',
             item.resolution ? `${item.resolution}p` : '', item.codec, item.chinese ? '中字' : '',
             item.uncensored ? '无码' : '', item.origins.join('、')].filter(Boolean).join(' · ')}</Help>
-          <div><Button type="button" variant="secondary" onClick={() => {
-            choose(item.uri, searched); setSelected(item.id);
-          }}>{selected === item.id ? '已填入磁力' : '选用此资源'}</Button></div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => {
+              choose(item.uri, searched); setSelected(item.id);
+            }}>{selected === item.id ? '已填入磁力' : '选用此资源'}</Button>
+            {qbittorrentReady ? <Button type="button" variant="secondary" disabled={Boolean(action.busy)}
+              {...busyProps(sendAction.busy === item.id)} onClick={() => send(item)}>发送到 qBittorrent</Button> : null}
+          </div>
+          {sent[item.id] ? <Help role="status">{sent[item.id]}</Help> : null}
+          {sendError[item.id] ? <ErrorText>{sendError[item.id]}</ErrorText> : null}
         </li>)}
       </ul> : null}
     </section>

@@ -206,6 +206,8 @@ Windows 连接清理复用 [CPython 3.14.7 的 Proactor 对象协议](https://gi
 
 OneJAV、Free JAV Torrent 只给种子链接。这类条目经索引器同源的下载代理取种子，由 bencode2 0.3.35（MIT，Python ≥3.10，有 cp314 Windows wheel 与纯 Python wheel）解码，再对 info 字典求 SHA-1。实证：真实 sukebei 种子算出的哈希与 Torznab `infohash` 一致；Prowlarr 代理对 OneJAV、Free JAV Torrent 返回 `application/x-bittorrent`。bencode2 和 fastbencode 0.3.11（Apache-2.0）都拒收键乱序的字典，重新编码就是原文。选 bencode2 是因为它有纯 Python 后备。torf（GPL-3.0）功能远超所需，bencode.py（BitTorrent 许可）、bencodepy（2015 年后停更）不采用。
 
+qBittorrent WebUI 由 HTTPX 0.28.1 直接调用登录、版本、建分类和 `torrents/add`。对照过 [WebAPI 说明](https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-%28qBittorrent-4.1%29) 与 changelog 至 2.15.1。qbittorrent-api 2026.10.1（MIT）覆盖整份 WebAPI，但它走 requests，请求层没有响应大小上限，异常还可能带上请求内容，因此不作为依赖。Peach 自己把响应限在 64 KiB、不跟随重定向、不使用环境代理；密码只进本机凭据。这一路不写账本，115 与 PikPak 的离线任务保持原样。
+
 这是实现查找表：每项能力由哪个现成实现承担、Peach 自己只负责哪一段。新增、恢复或重写代码前，按 `.claude/skills/peach-reuse-first/SKILL.md` 先查本文件、当前树、Git 历史和成熟外部实现；旧文件名不存在不等于能力缺失，继任关系见「已删除旧实现与当前继任者」。
 
 安装依赖的精确版本由 [Python 清单](../pyproject.toml)、[Python 锁文件](../uv.lock)、[前端清单](../frontend/package.json) 和 [静态依赖清单](../package.json) 维护。本页记录用途、许可证与取舍；取证版本和提交号只代表对应证据。

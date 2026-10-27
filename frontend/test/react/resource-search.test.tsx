@@ -34,6 +34,7 @@ it('回车按番号查询，选择候选只填表单', async () => {
   expect(choose).toHaveBeenCalledWith('magnet:?xt=urn:btih:' + 'a'.repeat(40), 'ABC-123');
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(host.textContent).toContain('已填入磁力');
+  expect(buttonNamed('发送到 qBittorrent', host)).toBeNull();
 });
 
 it('资料查询只接收相同番号，其他作品的字段不会进入资源弹层', async () => {
@@ -118,4 +119,26 @@ it('设置保存后清空 API key，移除需再保存才生效', async () => {
   await click(buttonNamed('添加索引器', host));
   await submit(section(host, '资源搜索'));
   expect((posts[2] as { indexers: { enabled: boolean }[] }).indexers[0]?.enabled).toBe(true);
+});
+
+it('发送失败时把原因留在这一条候选上', async () => {
+  const magnet = 'magnet:?xt=urn:btih:' + 'c'.repeat(40);
+  const posts: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      posts.push(JSON.parse(String(init.body)));
+      return { ok: false, status: 400, json: async () => ({ detail: 'qBittorrent 没有接受这个磁力' }) };
+    }
+    return { ok: true, json: async () => ({ state: 'ready', warnings: [], error: '', items: [{
+      id: 'c', uri: magnet, name: 'ABC-123', size: 1, seeders: 1, origins: ['测试源'],
+      resolution: 1080, codec: 'AVC', chinese: false, uncensored: false }] }) };
+  }));
+  const host = await mount(<ResourceSearch initialCode="ABC-123" choose={vi.fn()} qbittorrentReady />);
+  await act(async () => field(host, '按番号查找资源')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await settle();
+  await click(buttonNamed('发送到 qBittorrent', host));
+  await settle();
+  expect(posts).toEqual([{ magnet }]);
+  expect(host.textContent).toContain('qBittorrent 没有接受这个磁力');
+  expect(host.textContent).not.toContain('已发送到 qBittorrent');
 });
